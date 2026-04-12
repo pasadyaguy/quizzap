@@ -142,6 +142,7 @@ export default function Game() {
   const [view, setView] = useState<View>("home");
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState("");
+  // Unique ID for this player (used for tracking responses and scores)
   const [playerId, setPlayerId] = useState("");
 useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
 
