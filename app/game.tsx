@@ -142,7 +142,8 @@ export default function Game() {
   const [view, setView] = useState<View>("home");
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState("");
-  const [playerId] = useState(() => genCode() + genCode());
+  const [playerId, setPlayerId] = useState("");
+useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
 
   // Host state
   const [questions, setQuestions] = useState<Question[]>([{ text: "", options: ["", "", "", ""], timer: 20 }]);
