@@ -20,6 +20,12 @@ async function sset(code: string, state: object) {
 function genCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
 const COLORS = ["#FF3CAC", "#36D1DC", "#F7971E", "#56CCF2", "#6FCF97", "#BB6BD9"];
 const POLL_MS = 1500;
+const PLAYER_ICONS = [
+  "🐶","🐱","🦊","🐸","🐼","🦁",
+  "🐯","🐨","🐙","🦋","🐳","🦄",
+  "🧙","🥷","🦸","🧜","🤖","👾",
+  "💀","🎃","🧑‍🚀","🧟",
+];
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const STYLE = `
@@ -79,11 +85,15 @@ const STYLE = `
   .dot:nth-child(1){animation: bounce 1.2s infinite .0s}
   .dot:nth-child(2){animation: bounce 1.2s infinite .2s}
   .dot:nth-child(3){animation: bounce 1.2s infinite .4s}
+  .icon-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:20px}
+  .icon-btn{background:#0d0d1a;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-size:1.5rem;line-height:1;padding:8px 4px;text-align:center;transition:border-color .15s,background .15s,transform .1s}
+  .icon-btn:hover{border-color:var(--neon);background:rgba(0,245,212,.05)}
+  .icon-btn.icon-sel{border-color:var(--neon);background:rgba(0,245,212,.15);box-shadow:0 0 8px rgba(0,245,212,.4);transform:scale(1.1)}
 `;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Question { text: string; options: string[]; timer: number; }
-interface Player { name: string; joinedAt: number; }
+interface Player { name: string; joinedAt: number; icon?: string; }
 interface Response { optIdx: number; points: number; name: string; }
 interface GameState {
   phase: "lobby" | "question" | "results" | "finished";
@@ -117,14 +127,14 @@ function TimerRing({ seconds, total }: { seconds: number; total: number }) {
 // ─── Leaderboard ──────────────────────────────────────────────────────────────
 function Leaderboard({ scores, players, playerId }: { scores: Record<string, number>; players: Record<string, Player>; playerId: string }) {
   const sorted = Object.entries(scores)
-    .map(([pid, pts]) => ({ pid, pts, name: players[pid]?.name || "?" }))
+    .map(([pid, pts]) => ({ pid, pts, name: players[pid]?.name || "?", icon: players[pid]?.icon }))
     .sort((a, b) => b.pts - a.pts);
   return (
     <div>
       {sorted.map((p, i) => (
         <div key={p.pid} className="lb-row">
           <div className={`lb-rank ${i < 3 ? "top" : ""}`}>{i + 1}</div>
-          <div className="lb-name">{p.name}{p.pid === playerId ? " (you)" : ""}</div>
+          <div className="lb-name">{p.icon && <span style={{ marginRight: 6 }}>{p.icon}</span>}{p.name}{p.pid === playerId ? " (you)" : ""}</div>
           <div className="lb-pts">{p.pts} pts</div>
         </div>
       ))}
@@ -161,6 +171,7 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
   const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
   const [playerJoinCode, setPlayerJoinCode] = useState("");
   const [playerNameInput, setPlayerNameInput] = useState("");
+  const [playerIconInput, setPlayerIconInput] = useState<string>(PLAYER_ICONS[0]);
   const [lastRoundScores, setLastRoundScores] = useState<Record<string, Response>>({});
   const [liveQuestion, setLiveQuestion] = useState<Question | null>(null);
   const [liveTime, setLiveTime] = useState(0);
@@ -242,7 +253,7 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
     if (gs.phase === "finished") { alert("Game already ended!"); return; }
     const name = playerNameInput.trim() || "Player";
     setRoomCode(code); setPlayerName(name);
-    await sset(code, { ...gs, players: { ...gs.players, [playerId]: { name, joinedAt: Date.now() } } });
+    await sset(code, { ...gs, players: { ...gs.players, [playerId]: { name, icon: playerIconInput, joinedAt: Date.now() } } });
     setView("player-wait");
     startPolling(async () => {
       const cur: GameState = await sget(code);
@@ -405,7 +416,10 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
           <div className="scroll-list" style={{ marginBottom: 20 }}>
             {playerList.map((p, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#0d0d1a", borderRadius: 8, marginBottom: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS[i % COLORS.length] }} />
+                {p.icon
+                  ? <span style={{ fontSize: "1.2rem", lineHeight: 1 }}>{p.icon}</span>
+                  : <div style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS[i % COLORS.length] }} />
+                }
                 <span>{p.name}</span>
               </div>
             ))}
@@ -520,6 +534,18 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
           <label style={{ display: "block", color: "#777", fontSize: ".8rem", letterSpacing: 2, marginBottom: 6 }}>YOUR NAME</label>
           <input className="inp" placeholder="Enter your name" value={playerNameInput} onChange={e => setPlayerNameInput(e.target.value)} />
         </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", color: "#777", fontSize: ".8rem", letterSpacing: 2, marginBottom: 10 }}>YOUR ICON</label>
+          <div className="icon-grid">
+            {PLAYER_ICONS.map(icon => (
+              <button key={icon} type="button"
+                className={`icon-btn${playerIconInput === icon ? " icon-sel" : ""}`}
+                onClick={() => setPlayerIconInput(icon)}>
+                {icon}
+              </button>
+            ))}
+          </div>
+        </div>
         <button className="btn btn-neon" style={{ width: "100%" }} disabled={!playerJoinCode.trim()} onClick={playerJoin}>Join →</button>
         <button className="btn btn-ghost" style={{ width: "100%", marginTop: 10 }} onClick={() => setView("home")}>← Back</button>
       </div>
@@ -532,6 +558,7 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
       <div style={{ textAlign: "center" }}>
         <div className="logo" style={{ fontSize: "2.5rem", marginBottom: 4 }}>QUIZ<span>ZAP</span></div>
         <div style={{ color: "#555", marginBottom: 8 }}>Room <span style={{ color: "var(--neon)" }}>{roomCode}</span></div>
+        <div style={{ fontSize: "3rem", marginBottom: 8 }}>{playerIconInput}</div>
         <div style={{ color: "#aaa", marginBottom: 32 }}>Hey <strong>{playerName}</strong>! You&apos;re in 🎉</div>
         <div style={{ color: "#555", marginBottom: 16, fontSize: ".9rem" }}>Waiting for host to start</div>
         <div><span className="dot" /><span className="dot" /><span className="dot" /></div>
@@ -608,7 +635,10 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
         <div className="card" style={{ maxWidth: 400, textAlign: "center" }}>
           <div style={{ fontSize: "3rem", marginBottom: 8 }}>🏆</div>
           <h1 style={{ fontSize: "2.5rem", marginBottom: 4 }}>GAME OVER</h1>
-          <div style={{ color: "#555", marginBottom: 8 }}>{playerName}</div>
+          <div style={{ color: "#555", marginBottom: 8 }}>
+            {playerIconInput && <span style={{ marginRight: 6 }}>{playerIconInput}</span>}
+            {playerName}
+          </div>
           <div style={{ color: "var(--hot)", fontFamily: "'Bebas Neue',sans-serif", fontSize: "2rem", marginBottom: 4 }}>{scores[playerId] || 0} pts</div>
           <div style={{ color: "#555", marginBottom: 24 }}>Final rank: #{myRank}</div>
           <Leaderboard scores={scores} players={players} playerId={playerId} />
