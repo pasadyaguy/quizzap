@@ -94,7 +94,7 @@ const STYLE = `
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Question { text: string; options: string[]; timer: number; correctAnswer: number; }
 interface Player { name: string; joinedAt: number; icon?: string; }
-interface Response { optIdx: number; points: number; name: string; correct: boolean; }
+interface Response { optIdx: number; answeredAt: number; name: string; points: number; correct: boolean; }
 interface GameState {
   phase: "lobby" | "question" | "results" | "finished";
   currentQ: number;
@@ -224,9 +224,21 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
         clearInterval(timerRef.current!);
         const final: GameState = await sget(roomCode);
         const resp = final?.responses || {};
+        const q = final.questions[final.currentQ];
         const newScores = { ...(final?.scores || {}) };
-        Object.entries(resp).forEach(([pid, ans]) => { newScores[pid] = (newScores[pid] || 0) + ans.points; });
-        const endState: GameState = { ...final, phase: "results", scores: newScores };
+        const scoredResponses: Record<string, Response> = {};
+        Object.entries(resp).forEach(([pid, ans]) => {
+          const isCorrect = ans.optIdx === q?.correctAnswer;
+          let points = 0;
+          if (isCorrect) {
+            const elapsed = Math.max(0, (ans.answeredAt - (final.timerStarted || ans.answeredAt)) / 1000);
+            const total = q?.timer || 20;
+            points = Math.max(100, Math.round(1000 * (1 - elapsed / total)));
+          }
+          newScores[pid] = (newScores[pid] || 0) + points;
+          scoredResponses[pid] = { ...ans, points, correct: isCorrect };
+        });
+        const endState: GameState = { ...final, phase: "results", scores: newScores, responses: scoredResponses };
         await sset(roomCode, endState);
         setScores(newScores); setPlayers(final?.players || {}); setResponses(resp);
         setView("host-results");
@@ -277,11 +289,7 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
     setSelectedOpt(optIdx);
     const gs: GameState = await sget(roomCode);
     if (!gs || gs.phase !== "question") return;
-    const elapsed = (Date.now() - (gs.timerStarted || Date.now())) / 1000;
-    const total = gs.questions[gs.currentQ]?.timer || 20;
-    const isCorrect = optIdx === gs.questions[gs.currentQ]?.correctAnswer;
-    const points = isCorrect ? Math.max(100, Math.round(1000 * (1 - elapsed / total))) : 0;
-    await sset(roomCode, { ...gs, responses: { ...gs.responses, [playerId]: { optIdx, points, name: playerName, correct: isCorrect } } });
+    await sset(roomCode, { ...gs, responses: { ...gs.responses, [playerId]: { optIdx, answeredAt: Date.now(), name: playerName, points: 0, correct: false } } });
     setView("player-answered");
     let seenResults = false;
     startPolling(async () => {
