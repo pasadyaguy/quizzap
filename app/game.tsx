@@ -483,8 +483,23 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
               </div>
             ))}
           </div>
-          <div style={{ textAlign: "center", color: "#555", fontSize: "1rem" }}>
+          <div style={{ textAlign: "center", color: "#555", fontSize: "1rem", marginBottom: 16 }}>
             <span style={{ color: "var(--neon)", fontFamily: "'Bebas Neue',sans-serif", fontSize: "1.4rem" }}>{respCount}</span> / {totalPlayers} answered
+          </div>
+          <div>
+            {Object.entries(players).map(([pid, p]) => {
+              const resp = responses[pid];
+              return (
+                <div key={pid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#0d0d1a", borderRadius: 8, marginBottom: 6, opacity: resp ? 1 : 0.35 }}>
+                  {p.icon && <span style={{ fontSize: "1.2rem", lineHeight: 1 }}>{p.icon}</span>}
+                  <span style={{ flex: 1 }}>{p.name}</span>
+                  {resp
+                    ? <div style={{ width: 12, height: 12, borderRadius: "50%", background: COLORS[resp.optIdx] }} />
+                    : <span style={{ color: "#333", fontSize: ".85rem" }}>...</span>
+                  }
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
