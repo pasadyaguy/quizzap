@@ -280,12 +280,19 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
     const points = Math.max(100, Math.round(1000 * (1 - elapsed / total)));
     await sset(roomCode, { ...gs, responses: { ...gs.responses, [playerId]: { optIdx, points, name: playerName } } });
     setView("player-answered");
+    let seenResults = false;
     startPolling(async () => {
       const cur: GameState = await sget(roomCode);
       if (!cur) return;
       if (cur.phase === "results") {
+        seenResults = true;
         setScores(cur.scores || {}); setPlayers(cur.players || {}); setLastRoundScores(cur.responses || {});
-        stopPolling(); setView("player-results");
+        setView("player-results");
+      } else if (seenResults && cur.phase === "question") {
+        setSelectedOpt(null); setCurrentQ(cur.currentQ);
+        setTimerTotal(cur.questions[cur.currentQ]?.timer || 20);
+        setLiveQuestion(cur.questions[cur.currentQ]);
+        stopPolling(); setView("player-question");
       } else if (cur.phase === "finished") {
         setScores(cur.scores || {}); setPlayers(cur.players || {}); stopPolling(); setView("player-final");
       }
