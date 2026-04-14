@@ -214,34 +214,47 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
 
     let t = total;
     let ended = false;
+
+    async function endQuestion() {
+      ended = true;
+      clearInterval(timerRef.current!);
+      const final: GameState = await sget(roomCode);
+      const resp = final?.responses || {};
+      const q = final.questions[final.currentQ];
+      const newScores = { ...(final?.scores || {}) };
+      const scoredResponses: Record<string, Response> = {};
+      Object.entries(resp).forEach(([pid, ans]) => {
+        const isCorrect = ans.optIdx === q?.correctAnswer;
+        let points = 0;
+        if (isCorrect) {
+          const elapsed = Math.max(0, (ans.answeredAt - (final.timerStarted || ans.answeredAt)) / 1000);
+          const total = q?.timer || 20;
+          points = Math.max(100, Math.round(1000 * (1 - elapsed / total)));
+        }
+        newScores[pid] = (newScores[pid] || 0) + points;
+        scoredResponses[pid] = { ...ans, points, correct: isCorrect };
+      });
+      const endState: GameState = { ...final, phase: "results", scores: newScores, responses: scoredResponses };
+      await sset(roomCode, endState);
+      setScores(newScores); setPlayers(final?.players || {}); setResponses(scoredResponses);
+      setView("host-results");
+    }
+
     timerRef.current = setInterval(async () => {
       t--;
       setTimeLeft(t);
       const cur: GameState = await sget(roomCode);
-      if (cur) setResponses(cur.responses || {});
+      if (cur) {
+        setResponses(cur.responses || {});
+        const playerCount = Object.keys(cur.players || {}).length;
+        const responseCount = Object.keys(cur.responses || {}).length;
+        if (!ended && playerCount > 0 && responseCount >= playerCount) {
+          await endQuestion();
+          return;
+        }
+      }
       if (t <= 0 && !ended) {
-        ended = true;
-        clearInterval(timerRef.current!);
-        const final: GameState = await sget(roomCode);
-        const resp = final?.responses || {};
-        const q = final.questions[final.currentQ];
-        const newScores = { ...(final?.scores || {}) };
-        const scoredResponses: Record<string, Response> = {};
-        Object.entries(resp).forEach(([pid, ans]) => {
-          const isCorrect = ans.optIdx === q?.correctAnswer;
-          let points = 0;
-          if (isCorrect) {
-            const elapsed = Math.max(0, (ans.answeredAt - (final.timerStarted || ans.answeredAt)) / 1000);
-            const total = q?.timer || 20;
-            points = Math.max(100, Math.round(1000 * (1 - elapsed / total)));
-          }
-          newScores[pid] = (newScores[pid] || 0) + points;
-          scoredResponses[pid] = { ...ans, points, correct: isCorrect };
-        });
-        const endState: GameState = { ...final, phase: "results", scores: newScores, responses: scoredResponses };
-        await sset(roomCode, endState);
-        setScores(newScores); setPlayers(final?.players || {}); setResponses(scoredResponses);
-        setView("host-results");
+        await endQuestion();
       }
     }, 1000);
   }
