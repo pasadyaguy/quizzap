@@ -92,9 +92,9 @@ const STYLE = `
 `;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Question { text: string; options: string[]; timer: number; }
+interface Question { text: string; options: string[]; timer: number; correctAnswer: number; }
 interface Player { name: string; joinedAt: number; icon?: string; }
-interface Response { optIdx: number; points: number; name: string; }
+interface Response { optIdx: number; points: number; name: string; correct: boolean; }
 interface GameState {
   phase: "lobby" | "question" | "results" | "finished";
   currentQ: number;
@@ -157,7 +157,7 @@ export default function Game() {
 useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
 
   // Host state
-  const [questions, setQuestions] = useState<Question[]>([{ text: "", options: ["", "", "", ""], timer: 20 }]);
+  const [questions, setQuestions] = useState<Question[]>([{ text: "", options: ["", "", "", ""], timer: 20, correctAnswer: 0 }]);
   const [currentQ, setCurrentQ] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerTotal, setTimerTotal] = useState(20);
@@ -277,8 +277,9 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
     if (!gs || gs.phase !== "question") return;
     const elapsed = (Date.now() - (gs.timerStarted || Date.now())) / 1000;
     const total = gs.questions[gs.currentQ]?.timer || 20;
-    const points = Math.max(100, Math.round(1000 * (1 - elapsed / total)));
-    await sset(roomCode, { ...gs, responses: { ...gs.responses, [playerId]: { optIdx, points, name: playerName } } });
+    const isCorrect = optIdx === gs.questions[gs.currentQ]?.correctAnswer;
+    const points = isCorrect ? Math.max(100, Math.round(1000 * (1 - elapsed / total))) : 0;
+    await sset(roomCode, { ...gs, responses: { ...gs.responses, [playerId]: { optIdx, points, name: playerName, correct: isCorrect } } });
     setView("player-answered");
     let seenResults = false;
     startPolling(async () => {
@@ -376,11 +377,19 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
               <input className="inp" placeholder="Enter your question..." value={q.text}
                 onChange={e => setQuestions(qs => qs.map((x, i) => i === qi ? { ...x, text: e.target.value } : x))}
                 style={{ marginBottom: 12 }} />
+              <div style={{ marginBottom: 6, color: "#555", fontSize: ".78rem", letterSpacing: 1 }}>ANSWERS — click ✓ to mark the correct one</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
                 {q.options.map((opt, oi) => (
-                  <input key={oi} className="inp" placeholder={`Option ${oi + 1}`} value={opt}
-                    onChange={e => setQuestions(qs => qs.map((x, i) => i === qi ? { ...x, options: x.options.map((o, j) => j === oi ? e.target.value : o) } : x))}
-                    style={{ borderLeft: `3px solid ${COLORS[oi]}` }} />
+                  <div key={oi} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <button type="button" title="Mark as correct answer"
+                      onClick={() => setQuestions(qs => qs.map((x, i) => i === qi ? { ...x, correctAnswer: oi } : x))}
+                      style={{ flexShrink: 0, width: 28, height: 38, borderRadius: 6, border: `2px solid ${q.correctAnswer === oi ? "var(--neon)" : "#1e1e32"}`, background: q.correctAnswer === oi ? "var(--neon)" : "#0d0d1a", color: q.correctAnswer === oi ? "#08080f" : "#444", cursor: "pointer", fontSize: "1rem", fontWeight: "bold" }}>
+                      ✓
+                    </button>
+                    <input className="inp" placeholder={`Option ${oi + 1}`} value={opt}
+                      onChange={e => setQuestions(qs => qs.map((x, i) => i === qi ? { ...x, options: x.options.map((o, j) => j === oi ? e.target.value : o) } : x))}
+                      style={{ borderLeft: `3px solid ${COLORS[oi]}`, flex: 1 }} />
+                  </div>
                 ))}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -395,7 +404,7 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
             </div>
           ))}
           <button className="btn btn-ghost" style={{ width: "100%", marginBottom: 20 }}
-            onClick={() => setQuestions(qs => [...qs, { text: "", options: ["", "", "", ""], timer: 20 }])}>
+            onClick={() => setQuestions(qs => [...qs, { text: "", options: ["", "", "", ""], timer: 20, correctAnswer: 0 }])}>
             + Add Question
           </button>
           <button className="btn btn-neon" style={{ width: "100%", fontSize: "1.4rem", padding: "18px" }}
@@ -484,20 +493,24 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
         <div style={{ width: "100%", maxWidth: 600 }}>
           <div className="badge badge-neon" style={{ marginBottom: 12 }}>RESULTS</div>
           <h2 style={{ fontSize: "1.5rem", marginBottom: 24, lineHeight: 1.2 }}>{q?.text}</h2>
-          {validOpts.map((opt, i) => (
-            <div key={i} className="result-bar-wrap">
-              <div className="result-bar-label">
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: COLORS[i], display: "inline-block" }} />
-                  {opt}
-                </span>
-                <span style={{ color: "#aaa" }}>{tally[i]} vote{tally[i] !== 1 ? "s" : ""}</span>
+          {validOpts.map((opt, i) => {
+            const isCorrect = i === q?.correctAnswer;
+            return (
+              <div key={i} className="result-bar-wrap" style={isCorrect ? { border: "1px solid var(--neon)", borderRadius: 8, padding: "4px 8px", background: "rgba(0,245,212,.04)" } : {}}>
+                <div className="result-bar-label">
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: COLORS[i], display: "inline-block" }} />
+                    {opt}
+                    {isCorrect && <span style={{ color: "var(--neon)", fontSize: ".8rem", fontWeight: 600 }}>✓ CORRECT</span>}
+                  </span>
+                  <span style={{ color: "#aaa" }}>{tally[i]} vote{tally[i] !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="result-bar-bg">
+                  <div className="result-bar-fill" style={{ width: `${(tally[i] / total) * 100}%`, background: isCorrect ? "var(--neon)" : COLORS[i] }} />
+                </div>
               </div>
-              <div className="result-bar-bg">
-                <div className="result-bar-fill" style={{ width: `${(tally[i] / total) * 100}%`, background: COLORS[i] }} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
           <hr className="divider" />
           <h3 style={{ marginBottom: 12, fontSize: "1.1rem", color: "#aaa" }}>Leaderboard</h3>
           <div className="scroll-list" style={{ marginBottom: 24 }}>
@@ -611,13 +624,20 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
   );
 
   if (view === "player-results") {
-    const myPoints = lastRoundScores[playerId]?.points || 0;
+    const myResponse = lastRoundScores[playerId];
+    const myPoints = myResponse?.points || 0;
+    const isCorrect = myResponse?.correct ?? false;
+    const answered = !!myResponse;
     const myRank = Object.values(scores).filter(s => s > (scores[playerId] || 0)).length + 1;
     return (
       <div className="screen">
         <style>{STYLE}</style>
         <div className="card pop" style={{ maxWidth: 400, textAlign: "center" }}>
           <div className="badge badge-neon" style={{ marginBottom: 16 }}>THIS ROUND</div>
+          <div style={{ fontSize: "2.5rem", marginBottom: 4 }}>{!answered ? "⏱️" : isCorrect ? "✅" : "❌"}</div>
+          <div style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8, color: !answered ? "#555" : isCorrect ? "var(--neon)" : "var(--hot)" }}>
+            {!answered ? "No answer" : isCorrect ? "Correct!" : "Wrong!"}
+          </div>
           <div style={{ fontSize: "3rem", fontFamily: "'Bebas Neue',sans-serif", color: "var(--hot)", marginBottom: 4 }}>+{myPoints}</div>
           <div style={{ color: "#555", marginBottom: 20 }}>points earned</div>
           <div style={{ background: "#0d0d1a", borderRadius: 10, padding: "12px", marginBottom: 20 }}>
