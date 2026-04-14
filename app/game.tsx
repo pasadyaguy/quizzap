@@ -213,12 +213,14 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
     setView("host-question");
 
     let t = total;
+    let ended = false;
     timerRef.current = setInterval(async () => {
       t--;
       setTimeLeft(t);
       const cur: GameState = await sget(roomCode);
       if (cur) setResponses(cur.responses || {});
-      if (t <= 0) {
+      if (t <= 0 && !ended) {
+        ended = true;
         clearInterval(timerRef.current!);
         const final: GameState = await sget(roomCode);
         const resp = final?.responses || {};
@@ -275,8 +277,10 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
     setSelectedOpt(optIdx);
     const gs: GameState = await sget(roomCode);
     if (!gs || gs.phase !== "question") return;
+    const elapsed = (Date.now() - (gs.timerStarted || Date.now())) / 1000;
+    const total = gs.questions[gs.currentQ]?.timer || 20;
     const isCorrect = optIdx === gs.questions[gs.currentQ]?.correctAnswer;
-    const points = isCorrect ? 1000 : 0;
+    const points = isCorrect ? Math.max(100, Math.round(1000 * (1 - elapsed / total))) : 0;
     await sset(roomCode, { ...gs, responses: { ...gs.responses, [playerId]: { optIdx, points, name: playerName, correct: isCorrect } } });
     setView("player-answered");
     let seenResults = false;
