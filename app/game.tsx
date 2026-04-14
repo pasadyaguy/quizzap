@@ -240,7 +240,7 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
         });
         const endState: GameState = { ...final, phase: "results", scores: newScores, responses: scoredResponses };
         await sset(roomCode, endState);
-        setScores(newScores); setPlayers(final?.players || {}); setResponses(resp);
+        setScores(newScores); setPlayers(final?.players || {}); setResponses(scoredResponses);
         setView("host-results");
       }
     }, 1000);
@@ -522,6 +522,23 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
             );
           })}
           <hr className="divider" />
+          <h3 style={{ marginBottom: 12, fontSize: "1.1rem", color: "#aaa" }}>This Round</h3>
+          <div className="scroll-list" style={{ marginBottom: 24 }}>
+            {Object.entries(responses)
+              .map(([pid, r]) => ({ pid, ...r, icon: players[pid]?.icon }))
+              .sort((a, b) => b.points - a.points)
+              .map(r => (
+                <div key={r.pid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#0d0d1a", borderRadius: 8, marginBottom: 6 }}>
+                  {r.icon && <span style={{ fontSize: "1.2rem", lineHeight: 1 }}>{r.icon}</span>}
+                  <span style={{ flex: 1 }}>{r.name}</span>
+                  <span style={{ color: r.correct ? "var(--neon)" : "var(--hot)", marginRight: 8, fontWeight: 600 }}>{r.correct ? "✓" : "✗"}</span>
+                  <span style={{ fontFamily: "'Bebas Neue',sans-serif", color: "var(--hot)" }}>+{r.points}</span>
+                </div>
+              ))
+            }
+            {Object.keys(responses).length === 0 && <div style={{ color: "#555", textAlign: "center" }}>No answers submitted</div>}
+          </div>
+          <hr className="divider" />
           <h3 style={{ marginBottom: 12, fontSize: "1.1rem", color: "#aaa" }}>Leaderboard</h3>
           <div className="scroll-list" style={{ marginBottom: 24 }}>
             <Leaderboard scores={scores} players={players} playerId={playerId} />
@@ -655,7 +672,22 @@ useEffect(() => { setPlayerId(genCode() + genCode()); }, []);
             <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: "2rem", color: "var(--neon)" }}>{scores[playerId] || 0} pts</div>
             <div style={{ color: "#555", fontSize: ".85rem" }}>Rank #{myRank}</div>
           </div>
-          <div style={{ marginBottom: 16, color: "#777", fontSize: ".9rem" }}>Leaderboard</div>
+          <div style={{ marginBottom: 10, color: "#777", fontSize: ".9rem" }}>This Round</div>
+          <div style={{ width: "100%", marginBottom: 20 }}>
+            {Object.entries(lastRoundScores)
+              .map(([pid, r]) => ({ pid, ...r, icon: players[pid]?.icon }))
+              .sort((a, b) => b.points - a.points)
+              .map(r => (
+                <div key={r.pid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#0d0d1a", borderRadius: 8, marginBottom: 6, ...(r.pid === playerId ? { border: "1px solid var(--border)" } : {}) }}>
+                  {r.icon && <span style={{ fontSize: "1.2rem", lineHeight: 1 }}>{r.icon}</span>}
+                  <span style={{ flex: 1, color: r.pid === playerId ? "#f0f0f0" : "#aaa" }}>{r.name}{r.pid === playerId ? " (you)" : ""}</span>
+                  <span style={{ color: r.correct ? "var(--neon)" : "var(--hot)", marginRight: 8, fontWeight: 600 }}>{r.correct ? "✓" : "✗"}</span>
+                  <span style={{ fontFamily: "'Bebas Neue',sans-serif", color: "var(--hot)" }}>+{r.points}</span>
+                </div>
+              ))
+            }
+          </div>
+          <div style={{ marginBottom: 10, color: "#777", fontSize: ".9rem" }}>Leaderboard</div>
           <Leaderboard scores={scores} players={players} playerId={playerId} />
           <hr className="divider" />
           <button className="btn btn-neon" style={{ width: "100%" }} onClick={playerWaitForNext}>Next →</button>
